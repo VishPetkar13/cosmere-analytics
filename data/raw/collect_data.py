@@ -1,98 +1,136 @@
+# ─────────────────────────────────────────────────────────
+# COSMERE ANALYTICS — Data Collection Script
+# Uses the Hardcover GraphQL API to fetch book data
+# ─────────────────────────────────────────────────────────
+
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import time
 import json
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+API_KEY = os.getenv("HARDCOVER_API_KEY")
+
+API_URL = "https://api.hardcover.app/v1/graphql"
+
 
 books = [
     # --- Mistborn Era 1 ---
-    {"title": "The Final Empire",         "series": "Mistborn Era 1", "series_order": 1, "goodreads_url": "https://www.goodreads.com/book/show/68428.The_Final_Empire"},
-    {"title": "The Well of Ascension",    "series": "Mistborn Era 1", "series_order": 2, "goodreads_url": "https://www.goodreads.com/book/show/68429.The_Well_of_Ascension"},
-    {"title": "The Hero of Ages",         "series": "Mistborn Era 1", "series_order": 3, "goodreads_url": "https://www.goodreads.com/book/show/2767793.The_Hero_of_Ages"},
+    {"search_title": "Mistborn The Final Empire Brandon Sanderson",       "series": "Mistborn Era 1",     "series_order": 1},
+    {"search_title": "The Well of Ascension Brandon Sanderson",           "series": "Mistborn Era 1",     "series_order": 2},
+    {"search_title": "The Hero of Ages Brandon Sanderson",                "series": "Mistborn Era 1",     "series_order": 3},
 
     # --- Mistborn Era 2 ---
-    {"title": "The Alloy of Law",         "series": "Mistborn Era 2", "series_order": 1, "goodreads_url": "https://www.goodreads.com/book/show/10803121-the-alloy-of-law"},
-    {"title": "Shadows of Self",          "series": "Mistborn Era 2", "series_order": 2, "goodreads_url": "https://www.goodreads.com/book/show/16065004-shadows-of-self"},
-    {"title": "The Bands of Mourning",    "series": "Mistborn Era 2", "series_order": 3, "goodreads_url": "https://www.goodreads.com/book/show/18739426-the-bands-of-mourning"},
+    {"search_title": "The Alloy of Law Brandon Sanderson",                "series": "Mistborn Era 2",     "series_order": 1},
+    {"search_title": "Shadows of Self Brandon Sanderson",                 "series": "Mistborn Era 2",     "series_order": 2},
+    {"search_title": "The Bands of Mourning Brandon Sanderson",           "series": "Mistborn Era 2",     "series_order": 3},
+    {"search_title": "The Lost Metal Brandon Sanderson",                  "series": "Mistborn Era 2",     "series_order": 4},
 
     # --- Stormlight Archive ---
-    {"title": "The Way of Kings",         "series": "Stormlight Archive", "series_order": 1, "goodreads_url": "https://www.goodreads.com/book/show/7235533-the-way-of-kings"},
-    {"title": "Words of Radiance",        "series": "Stormlight Archive", "series_order": 2, "goodreads_url": "https://www.goodreads.com/book/show/17332218-words-of-radiance"},
-    {"title": "Oathbringer",              "series": "Stormlight Archive", "series_order": 3, "goodreads_url": "https://www.goodreads.com/book/show/34002132-oathbringer"},
-    {"title": "Rhythm of War",            "series": "Stormlight Archive", "series_order": 4, "goodreads_url": "https://www.goodreads.com/book/show/49021976-rhythm-of-war"},
-    {"title": "Wind and Truth",           "series": "Stormlight Archive", "series_order": 5, "goodreads_url": "https://www.goodreads.com/book/show/57975287-wind-and-truth"},
+    {"search_title": "The Way of Kings Brandon Sanderson",                "series": "Stormlight Archive", "series_order": 1},
+    {"search_title": "Words of Radiance Brandon Sanderson",               "series": "Stormlight Archive", "series_order": 2},
+    {"search_title": "Oathbringer Brandon Sanderson",                     "series": "Stormlight Archive", "series_order": 3},
+    {"search_title": "Rhythm of War Brandon Sanderson",                   "series": "Stormlight Archive", "series_order": 4},
+    {"search_title": "Wind and Truth Brandon Sanderson",                  "series": "Stormlight Archive", "series_order": 5},
 
     # --- Elantris ---
-    {"title": "Elantris",                 "series": "Elantris", "series_order": 1, "goodreads_url": "https://www.goodreads.com/book/show/68427.Elantris"},
+    {"search_title": "Elantris Brandon Sanderson",                        "series": "Elantris",           "series_order": 1},
+    {"search_title": "The Hope of Elantris Brandon Sanderson",            "series": "Elantris",           "series_order": 2},
 
     # --- Warbreaker ---
-    {"title": "Warbreaker",               "series": "Warbreaker", "series_order": 1, "goodreads_url": "https://www.goodreads.com/book/show/1268479.Warbreaker"},
+    {"search_title": "Warbreaker Brandon Sanderson",                      "series": "Warbreaker",         "series_order": 1},
 
-    # --- Standalone / Other ---
-    {"title": "The Rithmatist",           "series": "Standalone", "series_order": 1, "goodreads_url": "https://www.goodreads.com/book/show/14497.The_Rithmatist"},
-    {"title": "Tress of the Emerald Sea", "series": "Standalone", "series_order": 2, "goodreads_url": "https://www.goodreads.com/book/show/60531406-tress-of-the-emerald-sea"},
+    # --- Standalone Cosmere ---
+    {"search_title": "The Emperor's Soul Brandon Sanderson",              "series": "Standalone",         "series_order": 1},
+    {"search_title": "Tress of the Emerald Sea Brandon Sanderson",        "series": "Standalone",         "series_order": 2},
+    {"search_title": "Yumi and the Nightmare Painter Brandon Sanderson",  "series": "Standalone",         "series_order": 3},
+    {"search_title": "The Sunlit Man Brandon Sanderson",                  "series": "Standalone",         "series_order": 4},
 ]
 
-def scrape_goodreads(url):
 
-    headers = {"User_Agent": "Mozilla/5.0"}
+QUERY = """
+query SearchBook {
+  search(query: "%s", query_type: "Book", per_page: 1) {
+    results
+  }
+}
+"""
+
+def fetch_book(search_title):
+    # Build the headers — this is where Bearer + API key goes
+    headers = {
+        "Content-Type": "application/json",
+        "authorization": f"Bearer {API_KEY}"
+    }
+
+    # Insert the book title into the query template
+    query = QUERY % search_title
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        # Send the POST request to the API
+        response = requests.post(
+            API_URL,
+            json={"query": query},
+            headers=headers,
+            timeout=10
+        )
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        # Parse the JSON response
+        data = response.json()
 
-        script_tag = soup.find("script", {"type": "application/ld+json"})
+        # Navigate into the nested response to find the hits
+        hits = data["data"]["search"]["results"]["hits"]
 
-        if script_tag:
-            data = json.loads(script_tag.string)
+        # If we got at least one result back, return the first one
+        if hits:
+            return hits[0]["document"]
 
-            rating       = data.get("aggregateRating", {}).get("ratingValue", None)
-            rating_count = data.get("aggregateRating", {}).get("ratingCount", None)
-            review_count = data.get("aggregateRating", {}).get("reviewCount", None)
-            page_count   = data.get("numberOfPages", None)
-            description  = data.get("description", None)
-            pub_date     = data.get("datePublished", None)
-
-            return {
-                "goodreads_rating":        float(rating) if rating else None,
-                "goodreads_ratings_count": int(rating_count) if rating_count else None,
-                "goodreads_reviews_count": int(review_count) if review_count else None,
-                "page_count":              int(page_count) if page_count else None,
-                "description":             description,
-                "publication_year":        int(pub_date[:4]) if pub_date else None,
-            }
-        
     except Exception as e:
-        print(f" Error Scraping {url}: {e}")
+        print(f"   Error fetching '{search_title}': {e}")
 
-    return {
-        "goodreads_rating": None,
-        "goodreads_ratings_count": None,
-        "goodreads_reviews_count": None,
-        "page_count": None,
-        "description": None,
-        "publication_year": None,
-    }    
+    return None
 
 all_books = []
 
 for book in books:
-    print(f" Scraping: {book['title']}...")
-    scraped_data = scrape_goodreads(book["goodreads_url"])
+    print(f"📖 Fetching: {book['search_title']}...")
 
-    combined = {**book, **scraped_data}
+    result = fetch_book(book["search_title"])
 
-    all_books.append(combined)
+    if result:
+        row = {
+            "title":              result.get("title"),
+            "series":             book["series"],
+            "series_order":       book["series_order"],
+            "hardcover_id":       result.get("id"),
+            "release_year":       result.get("release_year"),
+            "pages":              result.get("pages"),
+            "rating":             result.get("rating"),
+            "ratings_count":      result.get("ratings_count"),
+            "reviews_count":      result.get("reviews_count"),
+            "users_read_count":   result.get("users_read_count"),
+            "has_audiobook":      result.get("has_audiobook"),
+            "has_ebook":          result.get("has_ebook"),
+            "genres":             "|".join(result.get("genres", [])),
+            "moods":              "|".join(result.get("moods", [])),
+            "content_warnings":   "|".join(result.get("content_warnings", [])),
+            "description":        result.get("description"),
+        }
 
-    time.sleep(2)
+        all_books.append(row)
+        print(f"   Found: {result.get('title')} (rating: {result.get('rating')})")
 
+    else:
+        print(f"   No result found for: {book['search_title']}")
 
-df = pd.DataFrame(all_books)
+    time.sleep(1)
 
-df = df.drop(columns=['goodreads_url'])
-
+    df = pd.DataFrame(all_books)
 df.to_csv("data/raw/cosmere_books.csv", index=False)
 
-print("\n Done! Data saved to data/raw/cosmere_books.csv")
-print(df)
+print(f"\n Done! {len(df)} books saved to data/raw/cosmere_books.csv")
+print("\n--- Preview ---")
+print(df[["title", "series", "rating", "ratings_count", "pages"]].to_string())
