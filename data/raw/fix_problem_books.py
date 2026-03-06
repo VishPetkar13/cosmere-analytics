@@ -19,7 +19,6 @@ import time
 load_dotenv()
 
 API_KEY = os.getenv("HARDCOVER_API_KEY")
-print("API KEY LOADED:", API_KEY[:20] if API_KEY else "NOT FOUND")
 API_URL = "https://api.hardcover.app/v1/graphql"
 
 problem_books = [

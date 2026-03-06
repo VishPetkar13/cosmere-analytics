@@ -96,7 +96,7 @@ def fetch_book(search_title):
 all_books = []
 
 for book in books:
-    print(f"📖 Fetching: {book['search_title']}...")
+    print(f" Fetching: {book['search_title']}...")
 
     result = fetch_book(book["search_title"])
 
